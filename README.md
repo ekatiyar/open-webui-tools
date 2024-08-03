@@ -1,12 +1,12 @@
 # Open WebUI Tools
 
-Some tools I have implemented to be used natively with [Open WebUI](https://github.com/open-webui/open-webui). Built with python with a focus on using provided python libraries in the Open WebUI environment.
+A collection of tools implemented to be used natively with [Open WebUI](https://github.com/open-webui/open-webui). Built using Python and leveraging the libraries provided in the Open WebUI environment.
 
-# Tools
+## 🛠️ Tools
 
-## Youtube Transcript Provider
+### 1. Youtube Transcript Provider
 
-Provides the full, detailed youtube transcript in English. 
+Provides a detailed, full-length transcript of any YouTube video in English.
 
 ### Motivation
-The built-in youtube tool in Web UI uses RAG which negatively affects the ability of a model to understand the logical flow of a piece of content, which causes summarization performance to suffer. We provide that transcript to the model directly.
+The native YouTube tool in Open WebUI employs RAG, which can hinder the model's ability to grasp the overall structure and logical flow of content, which impacts summarization performance negatively. This tool bypasses the RAG by providing the transcript directly to the model.
