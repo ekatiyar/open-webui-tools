@@ -68,7 +68,7 @@ class Tools:
         """
         Provides the title and full transcript of a YouTube video in English.
         Only use if the user supplied a valid YouTube URL.
-        Examples of valid YouTube URLs: [https://youtu.be/dQw4w9WgXcQ, https://www.youtube.com/watch?v=dQw4w9WgXcQ  ]
+        Examples of valid YouTube URLs: [https://youtu.be/dQw4w9WgXcQ, https://www.youtube.com/watch?v=dQw4w9WgXcQ]
 
         :param url: The URL of the youtube video that you want the transcript for.
         :return: The title and full transcript of the YouTube video in English.
@@ -77,8 +77,11 @@ class Tools:
 
         await emitter.progress_update(f"Getting transcript for {url}")
         video_id = get_youtube_video_id(url)
-        if video_id is None or video_id == "dQw4w9WgXcQ": # LLM's love passing in the Rick Roll url
+        if video_id is None:
             await emitter.error_update(f"Error: Invalid YouTube URL: {url}")
+            return ""
+        elif video_id == "dQw4w9WgXcQ": # LLM's love passing in the Rick Roll url when the user didn't provide one
+            await emitter.error_update(f"Error: No URL provided (except for Rick Roll ... is that what you want?).")
             return ""
         
         notegpt_url = f"https://notegpt.io/api/v1/get-transcript-v2?video_id={video_id}&platform=youtube"
