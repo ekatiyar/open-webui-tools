@@ -8,7 +8,7 @@ original_author: Pyotr Growpotkin
 original_author_url: https://github.com/christ-offer/
 original_github: https://github.com/christ-offer/open-webui-tools
 funding_url: https://github.com/open-webui
-version: 0.0.3
+version: 0.0.4
 license: MIT
 """
 
@@ -85,6 +85,7 @@ class Tools:
 
     def __init__(self):
         self.valves = self.Valves()
+        self.citation = True
 
     async def web_scrape(self, url: str, __event_emitter__: Callable[[dict], Any] = None, __user__: dict = {}) -> str:
         """
