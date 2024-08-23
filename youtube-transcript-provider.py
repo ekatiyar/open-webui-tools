@@ -9,12 +9,13 @@ version: 0.0.6
 license: MIT
 """
 
-from langchain_community.document_loaders import YoutubeLoader
-import re
+import unittest
 from typing import Callable, Any
 
-import unittest
-    
+from langchain_community.document_loaders import YoutubeLoader
+from pydantic import BaseModel, Field
+
+
 class EventEmitter:
     def __init__(self, event_emitter: Callable[[dict], Any] = None):
         self.event_emitter = event_emitter
@@ -31,20 +32,20 @@ class EventEmitter:
     async def emit(self, description="Unknown State", status="in_progress", done=False):
         if self.event_emitter:
             await self.event_emitter(
-                {
-                    "type": "status",
-                    "data": {
-                        "status": status,
-                        "description": description,
-                        "done": done,
-                    },
-                }
-            )
-    
+                {"type": "status", "data": {"status": status, "description": description, "done": done, }, })
+
 
 class Tools:
+    class Valves(BaseModel):
+        TRANSCRIPT_LANGUAGE: str = Field(default="en,en_auto",
+                                         description="A comma-separated list of languages from highest priority to lowest.", )
+        TRANSCRIPT_TRANSLATE: str = Field(default="en",
+                                          description="The language you want the transcript to auto-translate to, if it does not already exist.", )
+        CITITATION: bool = Field(default="True", description="True or false for citation", )
+
     def __init__(self):
-        self.citation = True
+        self.valves = self.Valves()
+        self.citation = self.valves.CITITATION
 
     async def get_youtube_transcript(self, url: str, __event_emitter__: Callable[[dict], Any] = None) -> str:
         """
@@ -57,7 +58,6 @@ class Tools:
         """
         emitter = EventEmitter(__event_emitter__)
 
-
         try:
             await emitter.progress_update(f"Getting transcript for {url}")
 
@@ -65,12 +65,14 @@ class Tools:
             if not url or url == "":
                 await emitter.error_update(error_message)
                 return error_message
-            elif "dQw4w9WgXcQ" in url: # LLM's love passing in this url when the user doesn't provide one
+            elif ("dQw4w9WgXcQ" in url):  # LLM's love passing in this url when the user doesn't provide one
                 await emitter.error_update(f"Error: No URL provided (except for Rick Roll ... is that what you want?).")
                 return error_message
-            
-            transcript = YoutubeLoader.from_youtube_url(url, add_video_info=True, language=["en", "en_auto"], translation="en").load()
-            
+
+            languages = [item.strip() for item in self.valves.TRANSCRIPT_LANGUAGE.split(',')]
+            transcript = YoutubeLoader.from_youtube_url(url, add_video_info=True, language=languages,
+                                                        translation=self.valves.TRANSCRIPT_TRANSLATE).load()
+
             if len(transcript) == 0:
                 error_message = f"Error: Failed to find transcript for {url}"
                 await emitter.error_update(error_message)
@@ -78,7 +80,7 @@ class Tools:
 
             title = transcript[0].metadata["title"]
             transcript = "\n".join([document.page_content for document in transcript])
-            
+
             await emitter.success_update(f"Transcript for {title} retrieved!")
             return f"Title: {title}\n\nTranscript:\n{transcript}"
 
@@ -87,9 +89,10 @@ class Tools:
             await emitter.error_update(error_message)
             return error_message
 
+
 class YoutubeTranscriptProviderTest(unittest.IsolatedAsyncioTestCase):
     async def assert_transcript_length(self, url: str, expected_length: int):
-        self.assertEqual(len(await Tools().get_youtube_transcript(url)), expected_length)
+        self.assertEqual(len(expected_length, await Tools().get_youtube_transcript(url)))
 
     async def assert_transcript_error(self, url: str):
         response = await Tools().get_youtube_transcript(url)
@@ -98,6 +101,14 @@ class YoutubeTranscriptProviderTest(unittest.IsolatedAsyncioTestCase):
     async def test_get_youtube_transcript(self):
         url = "https://www.youtube.com/watch?v=zhWDdy_5v2w"
         await self.assert_transcript_length(url, 1384)
+
+    async def test_get_youtube_transcript_de(self):
+        url = "https://www.youtube.com/watch?v=zhWDdy_5v2w"
+        tools_instance = Tools()
+        tools_instance.valves.TRANSCRIPT_TRANSLATE = "it"
+
+        transcript_response = await tools_instance.get_youtube_transcript(url)
+        self.assertEqual(1473, len(transcript_response))
 
     async def test_get_youtube_transcript_with_invalid_url(self):
         invalid_url = "https://www.example.com/invalid"
@@ -112,6 +123,7 @@ class YoutubeTranscriptProviderTest(unittest.IsolatedAsyncioTestCase):
         await self.assert_transcript_error(None)
         await self.assert_transcript_error("")
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     print("Running tests...")
     unittest.main()
