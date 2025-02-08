@@ -1,14 +1,14 @@
 """
 title: Enhanced Web Scrape
-description: An improved web scraping tool that extracts text content using Jina Reader, now with better filtering, user-configuration, and UI feedback using emitters.
 author: ekatiyar
 author_url: https://github.com/ekatiyar
-github: https://github.com/ekatiyar/open-webui-tools
+git_url: https://github.com/ekatiyar/open-webui-tools
+description: An improved web scraping tool that extracts text content using Jina Reader, now with better filtering, user-configuration, and UI feedback using emitters.
 original_author: Pyotr Growpotkin
 original_author_url: https://github.com/christ-offer/
-original_github: https://github.com/christ-offer/open-webui-tools
+original_git_url: https://github.com/christ-offer/open-webui-tools
 funding_url: https://github.com/open-webui
-version: 0.0.4
+version: 0.0.5
 license: MIT
 """
 
@@ -73,6 +73,7 @@ class Tools:
             default="",
             description="(Optional) Jina API key. Allows a higher rate limit when scraping. Used when a User-specific API key is not available."
         )
+        CITITATION: bool = Field(default="True", description="True or false for citation")
 
     class UserValves(BaseModel):
         CLEAN_CONTENT: bool = Field(
@@ -85,7 +86,7 @@ class Tools:
 
     def __init__(self):
         self.valves = self.Valves()
-        self.citation = True
+        self.citation = self.valves.CITITATION
 
     async def web_scrape(self, url: str, __event_emitter__: Callable[[dict], Any] = None, __user__: dict = {}) -> str:
         """
@@ -95,6 +96,8 @@ class Tools:
         :return: The scraped and processed webpage content, or an error message.
         """
         emitter = EventEmitter(__event_emitter__)
+        if "valves" not in __user__:
+            __user__["valves"] = self.UserValves()
 
         await emitter.progress_update(f"Scraping {url}")
         jina_url = f"https://r.jina.ai/{url}"
@@ -104,7 +107,7 @@ class Tools:
             "X-With-Generated-Alt": "true",
         }
 
-        if "valves" in __user__ and __user__["valves"].JINA_API_KEY:
+        if __user__["valves"].JINA_API_KEY:
             headers["Authorization"] = f"Bearer {__user__['valves'].JINA_API_KEY}"
         elif self.valves.GLOBAL_JINA_API_KEY:
             headers["Authorization"] = f"Bearer {self.valves.GLOBAL_JINA_API_KEY}"
@@ -113,7 +116,7 @@ class Tools:
             response = requests.get(jina_url, headers=headers)
             response.raise_for_status()
 
-            should_clean = "valves" not in __user__ or __user__["valves"].CLEAN_CONTENT
+            should_clean = __user__["valves"].CLEAN_CONTENT
             if should_clean:
                 await emitter.progress_update("Received content, cleaning up ...")
             content = clean_urls(response.text) if should_clean else response.text
