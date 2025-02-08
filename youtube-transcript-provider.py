@@ -1,20 +1,20 @@
 """
 title: Youtube Transcript Provider
-description: A tool that returns the full, detailed youtube transcript in English of a passed in youtube url.
 author: ekatiyar
 author_url: https://github.com/ekatiyar
-github: https://github.com/ekatiyar/open-webui-tools
-funding_url: https://github.com/open-webui
-version: 0.0.6
+git_url: https://github.com/ekatiyar/open-webui-tools
+description: A tool that returns the full youtube transcript in English of a passed in youtube url.
+version: 0.0.7
 license: MIT
 """
 
 from langchain_community.document_loaders import YoutubeLoader
-import re
 from typing import Callable, Any
+from pydantic import BaseModel, Field
 
 import unittest
-    
+
+
 class EventEmitter:
     def __init__(self, event_emitter: Callable[[dict], Any] = None):
         self.event_emitter = event_emitter
@@ -40,56 +40,76 @@ class EventEmitter:
                     },
                 }
             )
-    
+
 
 class Tools:
-    def __init__(self):
-        self.citation = True
+    class Valves(BaseModel):
+        CITITATION: bool = Field(default="True", description="True or false for citation")
 
-    async def get_youtube_transcript(self, url: str, __event_emitter__: Callable[[dict], Any] = None) -> str:
+    class UserValves(BaseModel):
+        TRANSCRIPT_LANGUAGE: str = Field(default="en,en_auto",
+                                         description="A comma-separated list of languages from highest priority to lowest.")
+        TRANSCRIPT_TRANSLATE: str = Field(default="en",
+                                          description="The language you want the transcript to auto-translate to, if it does not already exist.")
+
+    def __init__(self):
+        self.valves = self.Valves()
+        self.citation = self.valves.CITITATION
+
+    async def get_youtube_transcript(
+        self, url: str, __event_emitter__: Callable[[dict], Any] = None, __user__: dict = {}
+    ) -> str:
         """
         Provides the title and full transcript of a YouTube video in English.
         Only use if the user supplied a valid YouTube URL.
         Examples of valid YouTube URLs: https://youtu.be/dQw4w9WgXcQ, https://www.youtube.com/watch?v=dQw4w9WgXcQ
 
         :param url: The URL of the youtube video that you want the transcript for.
-        :return: The title and full transcript of the YouTube video in English, or an error message.
+        :return: The full transcript of the YouTube video in English, or an error message.
         """
         emitter = EventEmitter(__event_emitter__)
-
+        if "valves" not in __user__:
+            __user__["valves"] = self.UserValves()
 
         try:
-            await emitter.progress_update(f"Getting transcript for {url}")
+            await emitter.progress_update(f"Getting details for {url}")
 
             error_message = f"Error: Invalid YouTube URL: {url}"
             if not url or url == "":
                 await emitter.error_update(error_message)
                 return error_message
-            elif "dQw4w9WgXcQ" in url: # LLM's love passing in this url when the user doesn't provide one
-                await emitter.error_update(f"Error: No URL provided (except for Rick Roll ... is that what you want?).")
+            elif (
+                "dQw4w9WgXcQ" in url
+            ):  # LLM's love passing in this url when the user doesn't provide one
+                await emitter.error_update(
+                    f"Error: No URL provided (except for Rick Roll ... is that what you want?)."
+                )
                 return error_message
             
-            transcript = YoutubeLoader.from_youtube_url(url, add_video_info=True, language=["en", "en_auto"], translation="en").load()
-            
+            languages = [item.strip() for item in __user__["valves"].TRANSCRIPT_LANGUAGE.split(',')]
+            transcript = YoutubeLoader.from_youtube_url(url, add_video_info=False, language=languages, translation=__user__["valves"].TRANSCRIPT_TRANSLATE).load()
+                     
             if len(transcript) == 0:
                 error_message = f"Error: Failed to find transcript for {url}"
                 await emitter.error_update(error_message)
                 return error_message
 
-            title = transcript[0].metadata["title"]
             transcript = "\n".join([document.page_content for document in transcript])
-            
-            await emitter.success_update(f"Transcript for {title} retrieved!")
-            return f"Title: {title}\n\nTranscript:\n{transcript}"
+
+            await emitter.success_update(f"Transcript retrieved!")
+            return f"Transcript:\n{transcript}"
 
         except Exception as e:
             error_message = f"Error: {str(e)}"
             await emitter.error_update(error_message)
             return error_message
 
+
 class YoutubeTranscriptProviderTest(unittest.IsolatedAsyncioTestCase):
     async def assert_transcript_length(self, url: str, expected_length: int):
-        self.assertEqual(len(await Tools().get_youtube_transcript(url)), expected_length)
+        self.assertEqual(
+            len(await Tools().get_youtube_transcript(url)), expected_length
+        )
 
     async def assert_transcript_error(self, url: str):
         response = await Tools().get_youtube_transcript(url)
@@ -97,7 +117,7 @@ class YoutubeTranscriptProviderTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_get_youtube_transcript(self):
         url = "https://www.youtube.com/watch?v=zhWDdy_5v2w"
-        await self.assert_transcript_length(url, 1384)
+        await self.assert_transcript_length(url, 1348)
 
     async def test_get_youtube_transcript_with_invalid_url(self):
         invalid_url = "https://www.example.com/invalid"
@@ -112,6 +132,7 @@ class YoutubeTranscriptProviderTest(unittest.IsolatedAsyncioTestCase):
         await self.assert_transcript_error(None)
         await self.assert_transcript_error("")
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     print("Running tests...")
     unittest.main()
